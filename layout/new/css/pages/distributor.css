@@ -1,0 +1,84 @@
+.main {
+    padding-left:1em;
+}
+
+.navbar .brand { color:#1e8a4c; margin-left:-10px; }
+
+.code { position:absolute; top:-1000px; left:-1000px; }
+.modal { border:1px solid #000; margin-top:100px; }
+.scroll { text-align:left; width:450px; margin:0 auto; height:450px; }
+
+.deleted { color:#b94a48; }
+
+#overlay.modal { background-color:transparent; border:none; box-shadow:none; }
+
+/* Login screen */
+#login .account-container i { font-size:256px; }
+#login .login-extra {
+    display:block; width:537px; margin:1.5em auto; text-align:center;
+    line-height:19px; text-shadow:1px 1px 0px #fff;
+}
+
+/* User info screen */
+#userinfo .account-container { margin-top:35px; }
+#userinfo .content { text-align:left; }
+#userinfo .media-body { text-align:left}
+
+/* Supername choose */
+#supername .account-container.high { margin-top:20px;}
+#supername .account-container.search { margin-top:80px;}
+#supername .account-container.search input { font-size:1.1em; }
+#supername .container { width:690px; }
+
+#supername .person { -webkit-border-radius:5px; -moz-border-radius:5px;
+    border-radius:5px; line-height:36px; padding:0 0 0 6px; font-size:1.1em; }
+#supername .person.selected { color:#FFF; background-color:#1e8a4c; }
+#supername .person .code { display:none; }
+
+/* Article selection */
+#showarticles .account-container { margin-top:20px;}
+#showarticles .article { margin-top:6px; }
+#showarticles .article h4 { padding:10px 0; }
+
+/* Size selection */
+#showsizes .account-container { margin-top:40px;}
+
+#timout h2 { color:#f90; }
+
+.account-container{
+    width:537px; display:block; margin:120px auto 0 auto;
+	background:#f9f9f9; border:1px solid #d5d5d5; -webkit-border-radius:5px;
+	-moz-border-radius:5px; border-radius:5px; text-align:center;
+}
+.account-container h1 { color:#1e8a4c; font-size:26px; }
+.content { padding: 16px 28px 23px; }
+
+#superchoose .account-container { margin-top:70px; }
+
+
+.data {
+    margin-left:5px;
+    width:250px;
+}
+
+.navbar .nav a { font-size: 14px; }
+.navbar .navbar-inner { padding:0; }
+
+.shortcuts .shortcut { padding: 22px 10px; width: 250px; }
+.shortcuts .shortcut-label { font-size: 26px; font-weight: bold; }
+.shortcuts .shortcut .shortcut-icon { font-size: 86px; }
+.shortcuts .shortcut.green .shortcut-icon,
+.shortcuts .shortcut.green .shortcut-label { color: #1e8a4c; }
+.shortcuts .shortcut.red .shortcut-icon,
+.shortcuts .shortcut.red .shortcut-label { color: #FF0000; }
+
+.subnavbar {
+    margin-bottom: 1em;
+}
+
+.thumbnail { background-color:#eee; }
+.thumbnail .caption { font-weight:bold; font-size:1.1em; padding:1px; }
+.thumbnails .error .thumbnail { border:1px solid #000; background-color:#FF0000; }
+.thumbnails .selected .thumbnail { border:1px solid #000; background-color:#1e8a4c; }
+.thumbnails .selected .caption,
+.thumbnails .error .caption{ color:#FFF; }

@@ -1,0 +1,1127 @@
+================================================================================
+
+                           MANAGEMENT MODULE CHANGELOG
+
+================================================================================
+DROP TABLE IF EXISTS `found_item_types`;
+CREATE TABLE `found_item_types` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `value` varchar(50) CHARACTER SET utf8 NOT NULL,
+  `deleted_on` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+DROP TABLE IF EXISTS `found_items`;
+CREATE TABLE `found_items` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `garmentuser_id` int(10) unsigned DEFAULT NULL,
+  `garment_id` int(10) NOT NULL,
+  `found_item_type_id` int(10) unsigned DEFAULT NULL,
+  `date` datetime NOT NULL,
+  `deleted_on` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+);
+
+
+Release 1.91 - 2020 Q4
+
+# Update dashboard
+59 23 * * * cd /var/www/technix && mysql -uroot -pnt3chn1xi.sql technix_nki < update_log_dashboard.sql > /dev/null 2>&1
+
+# Update user modifications
+58 23 * * * cd /var/www/technix && mysql -uroot -pmt3chn1xs.sql technix_mmgent < update_user_modifications.sql > /dev/null 2>&1
+
+CREATE TABLE technix_log.`log_dashboard` (
+`circulationgroup_id`  int(10) UNSIGNED NOT NULL ,
+`date`  date NOT NULL ,
+`day`  varchar(100) NOT NULL ,
+`value`  int(100) NOT NULL ,
+`type`  varchar(100) NOT NULL ,
+INDEX `I1` (`circulationgroup_id`) USING BTREE ,
+INDEX `I2` (`date`) USING BTREE ,
+INDEX `I3` (`type`) USING BTREE ,
+INDEX `I4` (`circulationgroup_id`, `type`) USING BTREE 
+)
+;
+
+ALTER TABLE `log_garmentusers_garments`
+ADD INDEX `STARTTIME_ENDTIME` (`starttime`, `endtime`) USING BTREE ,
+ADD INDEX `STARTTIME_ENDTIME_DISTRIBUTOR_ID` (`starttime`, `endtime`, `distributor_id`) USING BTREE ;
+
+
+CREATE TABLE history_garmentusers
+SELECT gu.id garmentuser_id, gu.`name` garmentusers_name, gu.surname garmentusers_surname, gu.personnelcode garmentusers_personnelcode,
+gu.`code` garmentusers_code, gu.date_service_on garmentusers_date_service_on, gu.date_service_off garmentusers_date_service_off,
+f.`value` function, c.`name` clientdepartment ,p.name profession, gg.garments_in_use, IF(ISNULL(g.id),'no','yes') clothing, DATE(NOW()) date
+FROM garmentusers gu
+LEFT JOIN functions f ON f.id = gu.function_id
+LEFT JOIN clientdepartments c ON c.id = gu.clientdepartment_id
+LEFT JOIN professions p ON p.id = gu.profession_id
+LEFT JOIN (SELECT garmentuser_id, COUNT(*) garments_in_use FROM garmentusers_garments GROUP BY garmentuser_id) gg ON gg.garmentuser_id = gu.id
+LEFT JOIN garments g ON g.garmentuser_id = gu.id
+WHERE ISNULL(gu.deleted_on)
+GROUP BY gu.id;
+
+ALTER TABLE `history_garmentusers`
+ADD INDEX `I1` (`garmentuser_id`) USING BTREE ,
+ADD INDEX `I2` (`date`) USING BTREE ,
+ADD INDEX `I3` (`garmentuser_id`, `date`) USING BTREE ;
+
+CREATE TABLE `functions` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `value` varchar(250) CHARACTER SET utf8 NOT NULL,
+  `deleted_on` datetime DEFAULT NULL,
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB AUTO_INCREMENT=4 DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC;
+
+ALTER TABLE `garmentusers`
+ADD COLUMN `function_id`  int(10) NULL AFTER `costplace_id`;
+
+DROP TABLE IF EXISTS `loading_screens`;
+CREATE TABLE `loading_screens` (
+  `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+  `circulationgroup_id` int(10) NOT NULL,
+  `sort` enum('article','loadable') DEFAULT 'article',
+  PRIMARY KEY (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+
+ALTER TABLE `garmentusers`
+MODIFY COLUMN `lockernumber`  varchar(50) CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT NULL AFTER `deleted_on`;
+
+
+# Set overloaded garments to stock
+01 0 * * * cd /var/www/technix/ && php update_set_overloaded_garments_to_stock.php > /dev/null 2>&1
+
+ALTER TABLE `log_garments_scanlocations`
+ADD INDEX `I_ID` (`id`) USING BTREE ,
+ADD INDEX `lscanlocation_id` (`scanlocation_id`) USING BTREE ,
+ADD INDEX `I2` (`garment_id`, `date`) USING BTREE ;
+
+ALTER TABLE `circulationgroups`
+ADD COLUMN `credit_free_distribution`  enum('y','n') CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT 'n' AFTER `optimal_load`;
+
+ALTER TABLE `information_screens`
+ADD COLUMN `show_fullname`  enum('y','n') CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT 'y' AFTER `speed`;
+
+ALTER TABLE `garmentusers`
+ADD COLUMN `show_comments`  enum('y','n') NULL DEFAULT 'n' AFTER `comments`;
+
+ALTER TABLE `circulationgroups`
+ADD COLUMN `mupapu_required`  int(10) NULL AFTER `mupapu_stock_multiplier`,
+ADD COLUMN `mupapu_order`  int(10) NULL AFTER `mupapu_required`,
+ADD COLUMN `mupapu_extra`  int(10) NULL AFTER `mupapu_order`;
+
+INSERT INTO `scanlocationstatuses` (`name`, `description`) VALUES ('transport_to_laundry', 'Transport naar wasserij');
+  INSERT INTO `scanlocations` (`scanlocations`.`name`, `scanlocations`.`scanlocationstatus_id`, `scanlocations`.`translate`, `circulationgroup_id`)
+       SELECT `scanlocationstatuses`.`description`, `scanlocationstatuses`.`id`, `scanlocationstatuses`.`name`, 1
+         FROM `scanlocationstatuses`
+        WHERE `scanlocationstatuses`.`name` = 'transport_to_laundry';
+
+ALTER TABLE `depositlocations`
+ADD COLUMN `scanlocation_id_transport_to_laundry`  int(10) UNSIGNED NOT NULL AFTER `scanlocation_id_transport`;
+
+
+ALTER TABLE `circulationgroups`
+ADD COLUMN `mupapu_generate`  enum('n','y') CHARACTER SET latin1 COLLATE latin1_swedish_ci NOT NULL DEFAULT 'n' AFTER `load_circulation_adjustment`;
+
+INSERT INTO `settings` VALUES('mail_1_days','14');
+INSERT INTO `settings` VALUES ('mail_2_days','28');
+
+ALTER TABLE `articles`
+ADD COLUMN `distributorlocation_id`  int(10) NULL AFTER `articleimage_id`;
+
+INSERT INTO settings
+VALUES('mupapu_use_superuser',0);
+
+ALTER TABLE `log_disconnected_garments`
+ADD COLUMN `comments`  varchar(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT '' AFTER `garmentuser_id`;
+
+ALTER TABLE `circulationgroups`
+ADD COLUMN `fifo_distribution`  enum('y','n') CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT 'n' AFTER `tagconverter`;
+
+ALTER TABLE `circulationgroups`
+ADD COLUMN `optimal_load`  enum('y','n') CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT 'n' AFTER `fifo_distribution`;
+
+--- change crontab install per customer not per circulationgroup---
+# MUPAPU
+01 * * * * cd /var/www/technix/ && php mupapu_to_distrib_now.php > /dev/null 2>&1
+
+update database settings sync file names!!!
+
+--
+DROP TABLE IF EXISTS `log_garments_scanlocations`;
+CREATE TABLE `log_garments_scanlocations` (
+  `id` int(11) NOT NULL AUTO_INCREMENT,
+  `garment_id` int(10) NOT NULL,
+  `scanlocation_id` int(10) DEFAULT NULL,
+  `sub_scanlocation_id` int(10) DEFAULT NULL,
+  `cc` int(10) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `G_ID` (`garment_id`) USING BTREE,
+  KEY `I_ID` (`id`) USING BTREE,
+  KEY `lscanlocation_id` (`scanlocation_id`) USING BTREE
+) ENGINE=InnoDB;
+
+or
+
+ALTER TABLE `log_garments_scanlocations`
+ADD INDEX `I_ID` (`id`) USING BTREE ,
+ADD INDEX `lscanlocation_id` (`scanlocation_id`) USING BTREE ;
+--
+
+
+DROP TABLE IF EXISTS technix_log.`tmp_scanlocations`;
+CREATE TABLE technix_log.`tmp_scanlocations` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `garment_id` int(10) NOT NULL,
+  `scanlocation_id` int(10) DEFAULT NULL,
+  `sub_scanlocation_id` int(10) DEFAULT NULL,
+  `cc` int(10) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  KEY `Igarment_id` (`garment_id`) USING BTREE,
+  KEY `Iid` (`id`) USING BTREE,
+  KEY `lscanlocation_id` (`scanlocation_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+DROP TABLE IF EXISTS technix_log.`tmp_scanlocations2`;
+CREATE TABLE technix_log.`tmp_scanlocations2` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `garment_id` int(10) NOT NULL,
+  `scanlocation_id` int(10) DEFAULT NULL,
+  `sub_scanlocation_id` int(10) DEFAULT NULL,
+  `cc` int(10) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  KEY `Igarment_id` (`garment_id`) USING BTREE,
+  KEY `Iid` (`id`) USING BTREE,
+  KEY `lscanlocation_id` (`scanlocation_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+DROP TABLE IF EXISTS technix_log.`tmp_scanlocations3`;
+CREATE TABLE technix_log.`tmp_scanlocations3` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `garment_id` int(10) NOT NULL,
+  `scanlocation_id` int(10) DEFAULT NULL,
+  `sub_scanlocation_id` int(10) DEFAULT NULL,
+  `cc` int(10) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  KEY `Igarment_id` (`garment_id`) USING BTREE,
+  KEY `Iid` (`id`) USING BTREE,
+  KEY `lscanlocation_id` (`scanlocation_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+DROP TABLE IF EXISTS technix_log.`tmp_scanlocations4`;
+CREATE TABLE technix_log.`tmp_scanlocations4` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `garment_id` int(10) NOT NULL,
+  `scanlocation_id` int(10) DEFAULT NULL,
+  `sub_scanlocation_id` int(10) DEFAULT NULL,
+  `cc` int(10) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  KEY `Igarment_id` (`garment_id`) USING BTREE,
+  KEY `Iid` (`id`) USING BTREE,
+  KEY `lscanlocation_id` (`scanlocation_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+DROP TABLE IF EXISTS technix_log.`tmp_scanlocations5`;
+CREATE TABLE technix_log.`tmp_scanlocations5` (
+  `id` int(11) NOT NULL DEFAULT '0',
+  `garment_id` int(10) NOT NULL,
+  `scanlocation_id` int(10) DEFAULT NULL,
+  `sub_scanlocation_id` int(10) DEFAULT NULL,
+  `cc` int(10) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  KEY `Igarment_id` (`garment_id`) USING BTREE,
+  KEY `Iid` (`id`) USING BTREE,
+  KEY `lscanlocation_id` (`scanlocation_id`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+================================================================================
+ALTER TABLE `distributors`
+ADD COLUMN `type`  enum('GS','GSF','CWC') NULL DEFAULT 'GS' AFTER `deleted_on`,
+ADD COLUMN `posid`  varchar(30) NULL AFTER `type`;
+
+ALTER TABLE `distributors`
+MODIFY COLUMN `type`  enum('GS','GSF','CWC_IN','CWC_OUT') CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT 'GS' AFTER `deleted_on`;
+
+DROP TABLE IF EXISTS `log_load_tags`;
+CREATE TABLE `log_load_tags` (
+  `distributorlocation_id` int(10) unsigned NOT NULL,
+  `tag` varchar(50) DEFAULT NULL,
+  `date` datetime NOT NULL,
+  KEY `FK_log_rejected_garments_distributorlocations` (`distributorlocation_id`),
+  KEY `DATE` (`date`),
+  CONSTRAINT `log_load_tags_ibfk_1` FOREIGN KEY (`distributorlocation_id`) REFERENCES `distributorlocations` (`id`)
+) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+ALTER TABLE `distributors`
+ADD COLUMN `release_priority`  int(10) NOT NULL AFTER `priority`;
+
+ALTER TABLE `rejectlocations`
+ADD COLUMN `release_priority`  int(10) NOT NULL AFTER `switch`;
+
+
+================================================================================
+
+ALTER TABLE `garments`
+ADD COLUMN `delete_reason`  varchar(255) NULL AFTER `deleted_by`;
+
+
+DROP TABLE IF EXISTS `garmentusers_userbound_arsimos`;
+CREATE TABLE `garmentusers_userbound_arsimos` (
+  `garmentuser_id` int(10) unsigned NOT NULL DEFAULT '0',
+  `arsimo_id` int(10) unsigned NOT NULL,
+  `circulationgroup_id` int(10) NOT NULL,
+  `enabled` tinyint(1) NOT NULL,
+  `max_positions` int(10) unsigned DEFAULT NULL,
+  PRIMARY KEY (`garmentuser_id`,`arsimo_id`,`circulationgroup_id`),
+  KEY `FK_garmentusers_arsimos_arsimos` (`arsimo_id`),
+  KEY `IX_GARMENTUSER_ID` (`garmentuser_id`) USING BTREE,
+  KEY `IX_ENABLED` (`enabled`) USING BTREE
+) ENGINE=InnoDB DEFAULT CHARSET=latin1 ROW_FORMAT=DYNAMIC;
+SET FOREIGN_KEY_CHECKS=1;
+
+
+
+ALTER TABLE `circulationgroups`
+ADD COLUMN `type`  enum('GS','GSF','') NULL AFTER `description`;
+ALTER TABLE `circulationgroups`
+MODIFY COLUMN `type`  enum('GS','GSF','') CHARACTER SET utf8 COLLATE utf8_general_ci NULL DEFAULT 'GS' AFTER `description`;
+
+
+change stock scanlocations/scanlocationstatuses as Reinier
+
+1	never_scanned	Nog nooit gescand
+2	missing	Vermist
+3	stock_hospital	Voorraad ziekenhuis
+4	homewash	Thuis wassen
+5	repair	Reparatie
+6	despeckle	Ontvlekken
+7	conveyor	Kettingbaan
+8	loaded	Beladen
+9	rejected	Afgeworpen
+10	distributed	Uitgegeven
+11	deposited	Ingenomen
+12	container	Transport container
+13	laundry	Wasserij
+14	deleted	Verwijderd
+15	disconnected_from_garmentuser	Ontkoppeld van drager
+16	stock_laundry	Voorraad wasserij
+
+1	Nog nooit gescand		never_scanned	1		
+2	Vermist		missing	2		
+3	Voorraad ziekenhuis		stock_hospital	3		
+4	Thuiswassen		homewash	4		
+5	Reparatie		repair	5		
+6	Ontvlekking		despeckle	6		
+7	Kettingbaan 1	Reinier ABC	conveyor	7	1	
+8	Beladen A	Reinier ABC	loaded_a	8	1	
+9	Beladen B	Reinier ABC	loaded_b	8	1	
+10	Beladen C	Reinier ABC	loaded_c	8	1	
+11	Chaoot 1	Reinier ABC	reject_1	9	1	
+12	Kettingbaan 2	Reinier DEF	conveyor	7	1	
+13	Beladen D	Reinier DEF	loaded_d	8	1	
+14	Beladen E	Reinier DEF	loaded_e	8	1	
+15	Beladen F	Reinier DEF	loaded_f	8	1	
+16	Chaoot 2	Reinier DEF	reject_2	9	1	
+17	Drager	Reinier	garmentuser	10	1	
+18	Inname 1	Reinier	deposit_1	11	1	
+19	Inname 2	Reinier	deposit_2	11	1	
+20	Transport container	Reinier	container	12	1	
+21	Wasserij	Reinier	laundry	13	1	
+22	Verwijderd		deleted	14		
+23	Ontkoppeld van drager		disconnected_from_garmentuser	15		
+24	Voorraad wasserij		stock_laundry	16		
+
+=========================
+
+
+
+
+
+
+# Choose alternative sizes for garmentusers auto
+10 5 * * * cd /var/www/technix/ && php choose_alternative_sizes.php > /dev/null 2>&1
+
+ALTER TABLE `garments`
+ADD COLUMN `deleted_by`  varchar(50) NULL DEFAULT NULL AFTER `deleted_on`;
+
+all garment sync needs an update:
+by delete query: `garments`.`deleted_by` = 'importer',
+
+
+Release 1.8
+  2017-04-10: Modify 'Garmentuser details' overview tab order
+  2017-01-18: Fix bug with  'disconnected garments' overview
+  2017-01-16: Fix bug with  'garment details' overview
+  2017-01-12: Add cardcode2 and cardcode3 for 'garmentuser details' overview
+  2016-08-18: Add 'history' tab for 'garmentuser details' overview
+  2016-07-11: New overview: Information screens
+  2016-07-11: Fix bug with 'arsimos per garmentuser' overview
+  2016-07-11: Show passcode on 'garmentusers' overview
+  2016-07-11: New overview: 'extra dirty garments' (only for MCL - need special table: extra_dirty_garments)
+  2016-07-01: New overview: 'sync files'
+  2016-06-16: Modify 'Garment details' overview garmentuser history table
+  2016-06-14: Garments in use overview export bug fix
+  2016-06-09: Garmentusers and garments overviews search + selectbox bug fix
+  2016-05-25: Desktop garment reader bug fix
+  2016-05-11: Garmentuser details overview modified /layout/ 
+  2016-01-07: MUPAPU bug fix
+  2016-01-05: New feature: choose distributor for garmentusers who has userbound garments - via cronjob
+  2015-11-03: Modify 'Garmentuser per arsimo' overview [G]
+    Add filter circulationgroup, clientdepartment and costplace, post data for detail page
+  2015-11-02: Add 'set to stock' button for 'Rejected garments' overview [G]
+ 
+
+  SQL
+    ALTER TABLE `garmentusers`
+    MODIFY COLUMN `costplace_id`  int(10) UNSIGNED NULL DEFAULT NULL AFTER `exportcode`;
+    ALTER TABLE `garmentusers`
+    ADD INDEX `IX_garmentusers_costplaces` (`costplace_id`) USING BTREE ;
+    ALTER TABLE `garmentusers` ADD CONSTRAINT `FK_garmentusers_costplaces` FOREIGN KEY (`costplace_id`) REFERENCES `costplaces` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE;
+
+    CREATE TABLE `supergarmentusers_arsimos` (
+      `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+      `garmentuser_id` int(10) unsigned NOT NULL,
+      `arsimo_id` int(10) unsigned NOT NULL,
+      PRIMARY KEY (`id`)
+    ) ENGINE=InnoDB AUTO_INCREMENT=146 DEFAULT CHARSET=latin1;
+    
+    INSERT INTO supergarmentusers_arsimos(garmentuser_id, arsimo_id)
+    SELECT DISTINCT s.garmentuser_id, a.id FROM `supergarmentusers_articles` s 
+    INNER JOIN arsimos a ON a.article_id = s.article_id
+    WHERE ISNULL(a.deleted_on);
+
+    DROP TABLE IF EXISTS `supergarmentusers_articles`;
+    
+    ALTER TABLE `rejectionreasons`
+    ADD COLUMN `translate`  varchar(100) NULL AFTER `description`;
+
+    rejectionreasons:
+    unknown
+    tag_not_read
+    garment_unknown
+    multiple_chipcodes_read
+    garmentuser_of_garment_deleted
+    no_station_for_garmentuser
+    no_available_station_found
+    no_free_position_available
+    station_no_position_userbound
+    loadadvice_is_zero
+    loadadvice_is_zero
+    max_load_reached
+    no_free_position_available
+    no_station_for_garmentuser
+    check_for_repair
+    check_for_despeckle
+    linked_to_different_circulationgroup
+    no_max_load_for_garmentuser
+    max_load_reached_userbound
+    max_washcount_reached
+    garment_matches_rejection_rule
+
+    scanlocationstatuses:
+    never_scanned
+    missing
+    warehouse
+    homewash
+    repair
+    despeckle
+    conveyor
+    loaded
+    rejected
+    distributed
+    deposited
+    container
+    laundry
+    deleted
+    disconnected_from_garmentuser
+
+    ALTER TABLE `scanlocations`
+    ADD COLUMN `translate`  varchar(100) NULL AFTER `description`;
+
+    scanlocations:
+    never_scanned		
+    missing		
+    warehouse		
+    homewash		
+    repair		
+    despeckle		
+    conveyor	
+    loaded_a
+    loaded_b
+    loaded_c
+    loaded_d
+    reject_1
+    garmentuser
+    deposit_1
+    deposit_2
+    deposit_3
+    container
+    laundry
+    deleted
+    disconnected_from_garmentuser
+
+    ALTER TABLE `rejectlocations`
+    ADD COLUMN `translate`  varchar(100) NULL AFTER `description`;
+
+    rejectlocations:
+    reject_1
+
+    CREATE TABLE `information_screens` (
+    `id`  int(10) UNSIGNED NOT NULL AUTO_INCREMENT,
+    `circulationgroup_id`  int(10) NOT NULL,
+    `message`  varchar(255) NULL,
+    `color`  enum('green','red') NULL DEFAULT 'green',
+    `size`  enum('small','medium','large') NULL DEFAULT 'medium',
+    `sort`  enum('ASC','DESC') NULL DEFAULT 'ASC',
+    PRIMARY KEY (`id`)
+    )
+    ;
+
+    ALTER TABLE `information_screens`
+    ADD COLUMN `speed`  enum('slow','normal','fast') CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT NULL AFTER `sort`;
+
+
+    ALTER TABLE `articles`
+    ADD COLUMN `credit`  int(10) NULL DEFAULT 2 AFTER `articleimage_id`;
+    ALTER TABLE `articles`
+    ADD COLUMN `extra_info`  varchar(50) NULL AFTER `description`;
+    ALTER TABLE `users`
+    MODIFY COLUMN `privileges`  varchar(1500) CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT NULL AFTER `locale_id`;
+
+    ALTER TABLE `garments`
+    ADD COLUMN `sub_scanlocation_id`  int(10) NULL AFTER `scanlocation_id`;
+
+    CREATE TABLE `sub_scanlocations` (
+    `id` int(10) unsigned NOT NULL AUTO_INCREMENT,
+    `name` varchar(100) NOT NULL,
+    `scanlocationstatus_id` int(10) NOT NULL,
+    `translate` varchar(100) DEFAULT NULL,
+    PRIMARY KEY (`id`),
+    KEY `IX_sub_scanlocations_scanlocationstatuses` (`scanlocationstatus_id`) USING BTREE
+    )
+    ;
+
+    INSERT INTO sub_scanlocations
+    VALUES(1,'INSCAN',13,'laundry_inscan');
+    INSERT INTO sub_scanlocations
+    VALUES(2,'OUTSCAN',13,'laundry_outscan');
+    INSERT INTO sub_scanlocations
+    VALUES(3,'REPAIR',13,'laundry_repair');
+    INSERT INTO sub_scanlocations
+    VALUES(4,'REWASH',13,'laundry_rewash');
+
+    ALTER TABLE `emailaddresses`
+    ADD COLUMN `locale_id`  int(10) NULL AFTER `group`;
+
+    ALTER TABLE `garmentusers`
+    ADD COLUMN `code3`  varchar(50) NULL AFTER `code2`;
+
+    SET sql_log_bin = 0;
+
+    CREATE DATABASE technix_log;
+
+    DROP TABLE IF EXISTS `technix_log`.`log_garments_scanlocations`;
+    CREATE TABLE `technix_log`.`log_garments_scanlocations` (
+      `id` int(11) NOT NULL AUTO_INCREMENT,
+      `garment_id` int(10) NOT NULL,
+      `scanlocation_id` int(10) DEFAULT NULL,
+      `sub_scanlocation_id` int(10) DEFAULT NULL,
+      `cc` int(10) DEFAULT NULL,
+      `date` datetime NOT NULL,
+      PRIMARY KEY (`id`),
+      KEY `G_ID` (`garment_id`) USING BTREE
+    ) ENGINE=InnoDB AUTO_INCREMENT=1 DEFAULT CHARSET=latin1;
+
+    SET sql_log_bin = 1;
+
+    SET sql_log_bin = 0;
+
+    delimiter $$
+    DROP PROCEDURE IF EXISTS p_garment_scan;
+    CREATE PROCEDURE p_garment_scan(g_id int(10), s_id int(10), ss_id int(10), l datetime)
+    BEGIN
+            INSERT INTO `technix_log`.`log_garments_scanlocations`(`garment_id`, `scanlocation_id`, `sub_scanlocation_id`, `date`)
+            VALUES(g_id, s_id, ss_id, l);
+    END$$
+    delimiter;
+
+
+    DROP TRIGGER IF EXISTS `trig_garments_scanlocations`;
+    delimiter $$
+    CREATE TRIGGER `trig_garments_scanlocations` BEFORE UPDATE ON `garments` FOR EACH ROW
+    BEGIN
+            IF (OLD.`scanlocation_id` != NEW.`scanlocation_id` || (OLD.`scanlocation_id` = NEW.`scanlocation_id` && OLD.`sub_scanlocation_id` != NEW.`sub_scanlocation_id`)) THEN 
+                    CALL p_garment_scan(NEW.`id`, NEW.`scanlocation_id`, NEW.`sub_scanlocation_id`, NEW.`lastscan`);
+            END IF;
+    END $$
+    delimiter;
+
+    SET sql_log_bin = 1;
+
+    DROP TABLE IF EXISTS `garments_despecklesandrepairs`;
+    CREATE TABLE `garments_despecklesandrepairs` (
+      `id` int(10) NOT NULL AUTO_INCREMENT,
+      `garment_id` int(10) unsigned NOT NULL,
+      `despeckle_id` int(10) unsigned DEFAULT NULL,
+      `repair_id` int(10) DEFAULT NULL,
+      `date_in` date DEFAULT NULL,
+      `date_out` date DEFAULT NULL,
+      `status` tinyint(1) DEFAULT NULL,
+      `halt` tinyint(1) DEFAULT NULL,
+      `type` enum('despeckle','repair') NOT NULL,
+      PRIMARY KEY (`id`),
+      KEY `FK_garments_despecklesandrepairs_garments` (`garment_id`) USING BTREE,
+      KEY `DATE_IN` (`date_in`) USING BTREE,
+      KEY `DATE_OUT` (`date_out`) USING BTREE,
+      CONSTRAINT `garments_despecklesandrepairs_ibfk_1` FOREIGN KEY (`garment_id`) REFERENCES `garments` (`id`) ON UPDATE CASCADE
+    ) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+    ALTER TABLE `sub_scanlocations`
+    ADD COLUMN `value`  varchar(100) NULL AFTER `id`;
+
+    CREATE TABLE `garmentusers_articles` (
+    `garmentuser_id`  int(10) unsigned NOT NULL ,
+    `article_1_id`  int(10) unsigned NOT NULL ,
+    `article_2_id`  int(10) unsigned NOT NULL ,
+    `extra_credit`  int(10) NULL ,
+    PRIMARY KEY (`garmentuser_id`, `article_1_id`, `article_2_id`),
+    CONSTRAINT `FK_garmentusers_articles_garmentuser_id` FOREIGN KEY (`garmentuser_id`) REFERENCES `garmentusers` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `FK_garmentusers_articles_article_1_id` FOREIGN KEY (`article_1_id`) REFERENCES `articles` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    CONSTRAINT `FK_garmentusers_articles_article_2_id` FOREIGN KEY (`article_2_id`) REFERENCES `articles` (`id`) ON DELETE RESTRICT ON UPDATE CASCADE,
+    INDEX `IX_garmentusers_articles_garmentuser_id` (`garmentuser_id`) USING BTREE ,
+    INDEX `IX_garmentusers_articles_article_1_id` (`article_1_id`) USING BTREE ,
+    INDEX `IX_garmentusers_articles_article_2_id` (`article_2_id`) USING BTREE 
+    )
+    ;
+
+    ALTER TABLE `garmentusers_articles`
+    ADD COLUMN `id`  int(10) NOT NULL AUTO_INCREMENT FIRST ,
+    ADD INDEX `IX_garmentusers_articles_id` (`id`) USING BTREE ;
+
+    ALTER TABLE `garmentusers_articles`
+    MODIFY COLUMN `extra_credit`  tinyint(1) NULL DEFAULT 0 AFTER `article_2_id`,
+    ADD COLUMN `combined_credit`  tinyint(1) NULL DEFAULT 0 AFTER `extra_credit`;
+
+    ALTER TABLE `garments`
+    MODIFY COLUMN `maxwashcount`  int(10) UNSIGNED NULL DEFAULT 0 AFTER `washcount`;
+
+    ALTER TABLE `articlegroups`
+    ADD COLUMN `profession_id`  int(10) NULL AFTER `article_2_id`;
+
+  Crontab
+    # Choose distributor for garmentusers auto
+    05 4 * * * cd /var/www/technix/ && php choose_distributor_garmentuser.php > /dev/null 2>&1
+    # Clean log_garments_scanlocations
+    15 3 * * *  cd /var/www/technix/ && php delete_oldest_log_garments_scanlocations.php > /dev/null 2>&1
+
+  !!!scanlocationstatuses changed... modify synchronizer files also... stock -> loaded!!!
+  !!!add import file names to database settings table !!!
+
+================================================================================
+
+Release 1.7.1
+  2015-08-19: Show extra info when delete garmentuser(garments in use, loaded personal garments) [G]
+  2015-08-18: Add email to garmentuser details overview [G]
+  2015-07-17: Add articlecode column to circulationadvice overview [G]
+  2015-07-15: Garmentuser details overview only show the active disconnected garments [G]
+  2015-05-04: Modify 'Garmentusers per arsimo' overview. [G]
+  2015-05-04: Modify 'Current load' overview. New color for under the critical limit garments. 20 % [G]
+  2015-02-24: Fix bug with 'in circ.' and 'beyond circ.' overviews [G]
+  2015-01-30: Convert garment tag for every search field [G]
+  
+  SQL
+   ALTER TABLE `garmentusers`
+   ADD COLUMN `email`  varchar(255) NULL AFTER `lockernumber`;
+ 
+  FILES
+   * garmentuser_details.php [edit] 
+   * layout/pages/garmentuser_details.tpl [edit]
+   * layout/pages/report_circulationadvice.tpl [edit]
+   * report_beyond_circulation.php [edit]
+   * report_circulationadvice.php [edit]
+   * report_in_circulation.php [edit]   
+
+================================================================================
+
+Release 1.7
+  2015-01-12: 'Set missing' link => button on garment details overview [G]
+  2015-01-07: If you are in a detail page and you go back to the list, then return to the previous page where you were [G]
+  2014-12-17: New overview: disconnect garmentusers(clear garmentusers_garments table)
+  2014-12-12: Modify MUPAPU and the total report overview(check garments.circulationgroup_id)
+  2014-12-08: Modify total overview (Show all out circulation status) [G]
+  2014-12-08: Link for garments and garmentusers everywhere [G]
+  2014-12-03: 'Fill all' button for exportcodes overview [G]
+  2014-12-03: Show the last 30 scanlocation statuses at garment details overview / history tab [G]
+  2014-11-28: Packinglist generate and send email [G]
+  2014-11-28: New circulationadvice [G]
+  2014-11-21: Modify MUPAPU generate script [G]
+  2014-11-21: Show current and next period required garments on current load overview [G]
+  2014-11-17: New overview: packinglist generate (old packinglist overview) [G]
+  2014-11-17: Modify packinglist overview (show packinglist history overview) [G]    
+  2014-11-14: Fix userbound garments bug with current load overview [G]
+  2014-11-14: Fix userbound garments bug with MUPAPU [G]
+  2014-11-14: Fix status select bug with report in and out roulation overviews [G]
+  2014-11-14: Show lastscan and deleted date on garments overview [G]
+  2014-11-14: Set 'Nog nooit gescand' status when add garment via management module [G]
+  2014-11-14: Fix 'yellow background' problem with circulation advice [G]
+  2014-11-14: New overview: Clear depositlocation [G]
+  2014-11-05: Modify the new circulation advice [G]
+  2014-11-04: Disconnect from garmentuser status with overview [G]
+  2014-10-29: Garmentdespeckle details overview bug fix [G]
+  2014-09-16: Garmentuser per arsimo overview bug fix [G]
+  2014-09-16: Report total3 garmentusers name empty bug [G]
+  2014-09-12: 'Set stock' link => button on garment details overview [G]
+  
+  SQL
+  DROP TABLE IF EXISTS `log_garments_scanlocations`;
+  CREATE TABLE `log_garments_scanlocations` (
+               `id` INT NOT NULL PRIMARY KEY AUTO_INCREMENT,
+               `garment_id` int(10) NOT NULL,
+               `scanlocation_id` int(10) NULL,
+               `cc` int(10) NULL,
+               `date` datetime NOT NULL
+    );
+
+  ALTER TABLE `distributorlocations`
+    ADD COLUMN `warning_clear_queue`  enum('y','n') NULL DEFAULT 'y' AFTER `default_locale_id`;
+  ALTER TABLE `distributorlocations`
+    ADD COLUMN `allow_waiting_list`  enum('y','n') NULL DEFAULT 'n' AFTER `warning_clear_queue`;
+  ALTER TABLE `distributorlocations_loadadvice`
+    ADD COLUMN `current_period`  int(10) NULL AFTER `type`,
+    ADD COLUMN `next_period`  int(10) NULL AFTER `current_period`;
+    
+  ALTER TABLE `clientdepartments` ENGINE=InnoDB;
+  ALTER TABLE `costplaces` ENGINE=InnoDB;
+  ALTER TABLE `emailaddresses` ENGINE=InnoDB;
+  ALTER TABLE `log_users_login` ENGINE=InnoDB;
+  ALTER TABLE `management_info` ENGINE=InnoDB;
+  ALTER TABLE `throw_off_rules` ENGINE=InnoDB;
+  CREATE TABLE `log_disconnected_garments` (
+               `id`  int(10) UNSIGNED NOT NULL AUTO_INCREMENT ,
+	       `garment_id`  int(10) UNSIGNED NOT NULL ,
+               `garmentuser_id`  int(10) UNSIGNED NOT NULL ,
+               `date`  datetime NOT NULL ,
+  PRIMARY KEY (`id`));
+  INSERT INTO `scanlocationstatuses` (`name`, `description`) VALUES ('disconnected', 'Ontkoppeld van drager');
+  INSERT INTO `scanlocations` (`scanlocations`.`name`, `scanlocations`.`scanlocationstatus_id`)
+       SELECT `scanlocationstatuses`.`description`, `scanlocationstatuses`.`id`
+         FROM `scanlocationstatuses`
+        WHERE `scanlocationstatuses`.`name` = 'disconnected';
+
+  FILES
+   * clear_depositlocation.php [new]
+   * garments.php [edit]
+   * garment_details.php [edit]
+   * garmentuser_details.php [edit]
+   * include/engine.php [edit]
+   * layout/common/menu.tpl [edit]
+   * layout/pages/clear_depositlocation.tpl [new]
+   * layout/pages/garments.tpl [edit]
+   * layout/pages/garment_details_tab1.tpl [edit]
+   * layout/pages/garment_details_tab3.tpl [edit]
+   * layout/pages/packinglist_generate.tpl [new]
+   * layout/pages/report_disconnected_garments.tpl [new]
+   * layout/pages/report_circulationadvice.tpl [edit]
+   * layout/pages/report_new_circulationadvice.tpl [edit]
+   * layout/pages/user_details.tpl [edit]
+   * locale/dutch/language.php [edit]
+   * locale/english/language.php [edit]
+   * locale/french/language.php [edit]
+   * garmentdespeckle_details.php [edit]
+   * packinglist_generate.php [new]
+   * report_beyond_circulation.php [edit]
+   * report_disconnected_garments.php [new]
+   * report_garmentusers_per_arsimo_details.php [edit]
+   * report_in_circulation.php [edit]
+   * report_new_circulationadvice.php [edit]
+   * report_totals3.php [edit]
+
+  IMPORTANT
+  ! Modify MUPAPU crontab! Run mupapu every period start +1 minute [G]
+  ! SET privileges for the new overviews [G]
+
+================================================================================
+Release 1.6.1
+
+  2014-08-26: New circulation advice [G]
+  2014-08-12: Fix timelock bug with garmentuser details overview [G]
+  2014-07-28: Add extra column to excel export for deposits by date overview [G]
+  2014-07-28: New release
+
+  FILES
+  * garmentuser_details.php [edit]
+  * report_new_circulationadvice.php [new]
+  * report_deposits_by_date.php [edit]
+  * layout/common/menu.tpl [edit]
+  * layout/common/toolbar.tpl [edit]
+  * layout/pages/user_details.tpl [edit]
+  * layout/pages/report_new_circulationadvice.tpl [new]
+  * locale/dutch/language.php [edit]
+  * locale/english/language.php [edit]
+  * locale/french/language.php [edit]
+
+  IMPORTANT
+  ! Check the garmentusers exportcode! It has to be unique! (check_fix_exportcode_unique.sql) [G]
+
+================================================================================
+
+Release 1.6
+
+  2014-07-17: Supergarmentusers only access to certain articles [E]
+  2014-07-16: Fill the alternative sizes automatically [G]
+  2014-07-14: Alternative size cannot be the same as a first choice [G]
+  2014-07-11: Reserved station on garmentuser details overview - station tab [G]
+  2014-07-10: Garmentusers articles alternatives size option standard yes [G]
+  2014-07-10: Fixed pagenumber on machines load overview after submit [G]
+  2014-07-10: Unique exportcode on garmentusers details overview [G]
+  2014-07-10: Fix period bug with MUPAPU overview [G]
+  2014-07-10: Fix percentage bug in the management info [G]
+  2014-07-09: Search with 'exportcode' on garmentusers overview [G]
+  2014-07-07: New release
+
+  SQL
+  CREATE TABLE `supergarmentusers_articles` (
+    `id`  int(10) UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `garmentuser_id`  int(10) UNSIGNED NOT NULL ,
+    `article_id`  int(10) UNSIGNED NOT NULL ,
+    PRIMARY KEY (`id`));
+  ALTER TABLE `supergarmentusers`
+    ADD COLUMN `limit_to_articles`  tinyint(1) UNSIGNED NOT NULL DEFAULT 0 AFTER `garmentuser_id`;
+
+  FILES
+  * garmentmanager_details.php [edit]
+  * garmentmanagers.php [edit]
+  * garmentusers.php [edit]
+  * garmentuser_details.php [edit]
+  * garmentuser_details_tab2.php [edit]
+  * garmentuser_details_tab4.php [edit]
+  * management_info.php [edit]
+  * layout/pages/garmentmanager_details.tpl [edit]
+  * layout/pages/garmentmanagers.tpl [edit]
+  * layout/pages/garmentuser_details_tab_station.tpl [edit]
+  * layout/pages/garmentuser_details_tab2.tpl [edit]
+  * layout/pages/report_mupapu.tpl [edit]
+  * layout/pages/report_machines_load.tpl [edit]
+  * locale/dutch/language.php [edit]
+  * locale/english/language.php [edit]
+  * locale/french/language.php [edit]
+
+================================================================================
+
+Release 1.5.6
+
+  2014-07-04: Search without 'id' on garmentusers overview [G]
+  2014-07-02: Extra column(owner) for rejected garments overview [G]
+  2014-06-25: Fix translation bug on report total overview [G]
+  2014-06-25: Added the new permission option to distribute per station [E]
+  2014-06-20: Modify management info mail [G]
+  2014-06-20: Fix 'empty rows' bug with errormessages overview [G]
+  2014-06-20: Fix bug with distributors overview [G]
+  2014-06-11: Fix excel export header [G]
+  2014-06-11: Filter for garmentusers per arsimo overview [G]
+  2014-06-10: Fix current load overview bug [G]
+
+  SQL
+  ALTER TABLE `supergarmentusers`
+    ADD COLUMN `allow_station` enum('n','y') NULL DEFAULT 'n' AFTER `allow_normaluser`;
+
+  FILES
+  * errormessages.php [edit]
+  * garmentmanager_details.php [edit]
+  * garmentmanagers.php [edit]
+  * garments.php [edit]
+  * garmentusers.php [edit]
+  * management_info.php [edit]
+  * include/mysqlcontrol.php [edit]
+  * layout/locale/dutch/language.php [edit]
+  * layout/locale/english/language.php [edit]
+  * layout/locale/french/language.php [edit]
+  * layout/pages/distributors.tpl [edit]
+  * layout/pages/garmentmanager_details.tpl [edit]
+  * layout/pages/garmentmanagers.tpl [edit]
+  * layout/pages/report_arsimos_per_garmentuser.tpl [edit]
+  * layout/pages/report_garmentusers_per_arsimo.tpl [edit]
+  * report_arsimos_per_garmentuser.php [edit]
+  * report_current_load.php [edit]
+  * report_garmentusers_per_arsimo.php [edit]
+  * report_rejected_garments.php [edit]
+  * report_totals.php [edit]
+  * locale/dutch/language.php [edit]
+  * locale/english/language.php [edit]
+  * locale/french/language.php [edit]
+
+  IMPORTANT
+  ! Remove the weekly testmessage from the cronjobs (crontab -e) [E]
+
+================================================================================
+
+Release 1.5.5
+
+  2014-06-05: Fix MUPAPU bug [G]
+  2014-06-05: Fix bug with garmentusers per arsimo overview [G]
+  2014-06-05: Excel export for circulationadvice overview [G]
+  2014-06-05: Fix print bug with circulationadvice [G]
+  2014-06-05: Fix bug with pakbonnen [G]
+  2014-05-05: Add a last scan filter to overview circulationadvice [G]
+  2014-05-01: Modify overviews excel export [G]
+  2014-05-01: Put 'Storingen' overview in 'Linnendienst' group [G]
+  2014-04-29: Fix bugs with garment repairs and despeckles overview [G]
+  2014-04-28: Fix bugs with current load overview [G]
+  2014-04-28: Fixed periods in MUPAPU [G]
+  2014-04-24: Fix bug with rejected garments [G]
+  2014-04-16: Fix bug with thuiswassen [G]
+  2014-04-16: The status unknown must get another name: Nog nooit gescand [G]
+  2014-04-15: Add a size filter to overview longer in and out of roulation [G]
+  2014-04-15: Fixed access denied bug [G]
+  2014-04-15: Added new files for Technix GSX [G]
+  2014-03-12: Make a new overview with all the error messages. [G]
+  2014-03-12: Removed hooks_to-many en hooks_to-one from load and database [E]
+  2014-02-17: Fix 'connect garment with garmentuser' bug on garment details overview [G]
+  2014-02-14: Fix bug with garment tab of garmentuser details overview [G]
+  2014-02-14: Deleted status field from profile(garmentuser) tab of garmentuser details overview [G]
+  2014-02-13: New overview: arsimos per garmentuser [G]
+  2014-02-13: Fixed the 'first/surname' bug with garmentusers overview [G]
+  2014-02-13: Fixed the 'field chooser' bug
+                with garments and garmentusers overview (now working on IE8) [G]
+  2014-02-13: Fixed the 'chaoot chooser' bug with rejected garments overview [G]
+  2014-02-11: Fixed the 'No items found' bugs with garment despeckles and repairs overview [G]
+  2014-02-03: Modified carrierbound overview [G]
+  2014-02-03: Modified garmentusers per arsimo overview [G]
+  2014-01-31: Modified garments information for current load overview [G]
+  2014-01-28: Deleted status in use, never delete loaded garment [G]
+  2014-01-24: Added a new scanlocations: Verwijderd [G]
+  2014-01-21: Modification filter for the garments overview [G]
+  2014-01-21: Clientdepartment field for the garmentusers overview [G]
+  2014-01-20: New release
+
+  SQL
+  UPDATE `scanlocationstatuses` SET `description`='Nog nooit gescand' WHERE (`id`='1');
+  UPDATE `scanlocations` SET `name`='Nog nooit gescand' WHERE (`id`='1');
+  INSERT INTO `scanlocations` (`scanlocations`.`name`, `scanlocations`.`scanlocationstatus_id`)
+    SELECT `scanlocationstatuses`.`description`, `scanlocationstatuses`.`id`
+    FROM `scanlocationstatuses`
+    WHERE `scanlocationstatuses`.`name` = 'deleted';
+  UPDATE `garments`
+    SET `garments`.`scanlocation_id` = (SELECT `scanlocations`.`id`
+       FROM `scanlocations` WHERE `scanlocations`.`name` = 'Verwijderd' LIMIT 1)
+    WHERE `garments`.`deleted_on` IS NOT NULL;
+  ALTER TABLE `distributors` DROP COLUMN `hooks_one-to-many`, DROP COLUMN `hooks_one-to-one`;
+  CREATE TABLE `errormessages` (
+    `id`  int(10) UNSIGNED NOT NULL AUTO_INCREMENT ,
+    `distributor_id`  int(10) UNSIGNED NULL DEFAULT NULL ,
+    `distributorlocation_id`  int(10) UNSIGNED NULL DEFAULT NULL ,
+    `message`  varchar(255) CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT NULL ,
+    `type`  varchar(30) CHARACTER SET latin1 COLLATE latin1_swedish_ci NULL DEFAULT NULL ,
+    `date`  datetime NULL DEFAULT NULL ,
+    PRIMARY KEY (`id`)
+    )
+    ENGINE=InnoDB
+    DEFAULT CHARACTER SET=latin1 COLLATE=latin1_swedish_ci
+    ROW_FORMAT=Compact;
+
+  FILES
+  * carrierbound.php [edit]
+  * carrierbound_details.php [edit]
+  * errormessages.php [new]
+  * garmentusers.php [edit]
+  * garmentuser_details.php [edit]
+  * garmentuser_details_tab3.php [edit]
+  * garments.php [edit]
+  * garment_details.php [edit]
+  * mupapu_to_distrib_now.php [edit]
+  * report_arsimos_per_garmentuser.php [new]
+  * report_beyond_circulation.php [edit]
+  * report_current_load.php [edit]
+  * report_garmentusers_per_arsimo.php [edit]
+  * report_garmentusers_per_arsimo_details.php [edit]
+  * report_in_circulation.php [edit]
+  * report_rejected_garments.php [edit]
+  * include/functions.garments.php [edit]
+  * include/htmlobjects.php [edit]
+  * include/mupapu.php [edit]
+  * layout/common/menu.tpl [edit]
+  * layout/pages/carrierbound_details.tpl [edit]
+  * layout/pages/errormessages.tpl [new]
+  * layout/pages/garmentusers.tpl [edit]
+  * layout/pages/garments.tpl [edit]
+  * layout/pages/garmentdespeckles.tpl [edit]
+  * layout/pages/garmentrepairs.tpl [edit]
+  * layout/pages/garmentuser_details_tab3.tpl [edit]
+  * layout/pages/garmentuser_details_tab5.tpl [edit]
+  * layout/pages/report_arsimos_per_garmentuser.tpl [new]
+  * layout/pages/report_beyond_circulation.tpl [edit]
+  * layout/pages/report_garmentusers_per_arsimo.tpl [edit]
+  * layout/pages/report_garmentusers_per_arsimo_details.tpl [edit]
+  * layout/pages/report_in_circulation.tpl [edit]
+  * layout/pages/user_details.tpl [edit]
+  * locale/dutch/language.php [edit]
+  * locale/english/language.php [edit]
+  * locale/french/language.php [edit]
+
+  IMPORTANT
+  ! Update the garment synchroniser (set deleted garment status).
+  ! Update the number of total hooks in the distributors table.
+  ! Set 'arsimos per garmentuser' privileges for all users
+  ! Set 'failures' privileges for all users
+
+  ! DO NOT UPDATE WITHOUT UPDATING DISTRIBUTION SOFTWARE
+
+================================================================================
+
+Release 1.5.4
+
+  2014-01-17: Added a new scanlocationstatus: deleted
+  2014-01-17: Add privileges to the super garmentusers [E]
+  2014-01-10: New release
+
+  SQL
+  INSERT INTO `scanlocationstatuses` (`name`, `description`) VALUES ('deleted', 'Verwijderd');
+  ALTER TABLE `supergarmentusers`
+    ADD COLUMN `allow_normaluser` enum('n','y') NULL DEFAULT 'y' AFTER `maxcredit`,
+    ADD COLUMN `allow_supercard` enum('n','y') NULL DEFAULT 'y' AFTER `allow_normaluser`,
+    ADD COLUMN `allow_supername` enum('n','y') NULL DEFAULT 'y' AFTER `allow_supercard`;
+
+  FILES
+  * garmentmanagers.php [edit]
+  * garmentmanager_details.php [edit]
+  * layout/pages/garmentmanagers.tpl [edit]
+  * layout/pages/garmentmanager_details.php [edit]
+  * locale/dutch/language.php [edit]
+  * locale/english/language.php [edit]
+  * locale/french/language.php [edit]
+
+================================================================================
+
+Release 1.5.3
+
+  2014-01-10: New overview: alternative sizes [G]
+  2014-01-09: Show only active garments in the garmentusers per arsimo overview [G]
+  2013-12-30: Fixed management info by email function bug [G]
+  2013-12-19: Fixed garmentusers overview export bug [G]
+  2013-12-16: Fixed distribution by date overview export bug [G]
+  2013-12-16: Fixed article details overview bug [G]
+  2013-12-02: New release
+
+  SQL
+  DELETE FROM `management_info`;
+  ALTER TABLE `distributorlocations`
+    ADD COLUMN `allow_choose_arsimo`  enum('n','y') NULL DEFAULT 'n' AFTER `allow_alt_arsimos`;
+  CREATE TABLE `alt_arsimos` (`arsimo_id` int(10) NOT NULL,`alt_arsimo_id` int(10) NOT NULL,
+    PRIMARY KEY (`arsimo_id`)) ENGINE=InnoDB DEFAULT CHARSET=latin1;
+
+  FILES
+  * report_garmentusers_per_arsimo.php [edit]
+  * user_details.php [edit]
+  * alternative_sizes.php [new]
+  * layout/pages/alternative_sizes.tpl [new]
+  * layout/common/menu.tpl [edit]
+  * locale/*/language.php [edit]
+
+================================================================================
+
+Release 1.5.2
+
+  2013-12-02: Fixed management info by email function [G]
+  2013-11-20: Fixed database chooser bug in dev server [G]
+  2013-11-20: Fixed welcome.php bug, redirect to login page [E]
+  2013-11-19: Fixed delete garment from distributor load error [G]
+  2013-11-19: Fixed if session does not exists, go to login page [E]
+  2013-11-14: New release
+
+  FILES
+  * include/accesscontrol.php [edit]
+  * welcome.php [edit]
+
+================================================================================
+
+Release 1.5.1
+
+  2013-11-14: Fix bug with userbound [G]
+  2013-11-12: Save the field chooser data for garmentusers.tpl and garments.tpl [G]
+  2013-11-12: Removed users history, not being used [E]
+  2013-11-12: Added client settings [E]
+  2013-11-12: Fix bug with user password change [G]
+  2013-11-12: Visibility terms of submenus for users [G]
+  2013-11-11: Fix apostrophe error with mysql update-insert (-php 5.3) [G]
+  2013-11-05: Search for tag2 in repairs and despeckles aswell [E]
+  2013-11-05: Added Config / Email / Database Class [E]
+  2013-11-05: Added e-mail settings [E]
+  2013-11-05: Removed the account 'Adminstrator', not being used [E]
+  2013-11-05: Possibility to empty the distributor load [G]
+  2013-11-05: Fix minor language errors [E]
+  2013-11-04: Fix garment excel export error [G]
+  2013-11-04: The possibility to search on the tag2 column [E]
+
+  SQL
+  DELETE FROM `settings` WHERE `name` = 'backlog_actions';
+  DELETE FROM `settings` WHERE `name` = 'backlog_file_location';
+  DELETE FROM `settings` WHERE `name` = 'backlog_queries';
+  DELETE FROM `users_circulationgroups` WHERE `user_id`='1';
+  DELETE FROM `users` WHERE `username` = 'Administrator';
+  ALTER TABLE `settings` MODIFY COLUMN `value` varchar(1000) CHARACTER SET latin1
+    COLLATE latin1_swedish_ci NULL AFTER `name`;
+  ALTER TABLE `users` MODIFY COLUMN `deleted_on` datetime NULL
+    DEFAULT NULL AFTER `userprofile_id`;
+  ALTER TABLE `clients` ADD COLUMN `country` varchar(50) CHARACTER SET utf8 COLLATE utf8_general_ci NOT NULL AFTER `address_city`;
+  ALTER TABLE `users` DROP FOREIGN KEY `FK_users_userprofiles`;
+  ALTER TABLE `userprofiles_control` DROP FOREIGN KEY `FK_userprofiles_control_userprofiles`;
+  ALTER TABLE `userprofiles_control` DROP INDEX `FK_userprofiles_control_userprofiles`;
+  ALTER TABLE `users` DROP INDEX `FK_users_userprofiles`;
+  ALTER TABLE `users` DROP COLUMN `userprofile_id`;
+  ALTER TABLE `users` DROP COLUMN `rows_per_page`;
+  ALTER TABLE `users` ADD COLUMN `privileges` varchar(1000) NULL AFTER `locale_id`;
+  INSERT INTO `settings` (`name`) VALUES ('client');
+  INSERT INTO `settings` (`name`) VALUES ('email');
+  DROP TABLE `userprofiles`;
+  DROP TABLE `userprofiles_control`;
+  DROP TABLE `users_history`;
+  UPDATE `users` SET `privileges` = '{
+    "common":{"departments":"on","garmentusers":"on","garments":"on"},
+    "reports":{"total_report":"on","garments_in_use":"on","distribution_by_date":"on","current_load":"on","misseized_garments":"on","rejected_garments":"on","deposited_garments":"on","userbound":"on","garmentusers_per_arsimo":"on","machines_load":"on","packinglists":"on"},
+    "manually":{"distribution":"on","deposit":"on"},
+    "circulation_management":{"circulationadvice":"on","beyond_circulation":"on","in_circulation":"on","throw_off_garments":"on"},
+    "linen_service":{"repairs":"on","despeckles":"on","tag_replacements":"on","extra_load":"on","washcount_garments":"on","userbound":"on"},
+    "master_data":{"sizes":"on","articles":"on","professions":"on","garmentmodifications":"on","garmentmanagers":"on"}}';
+  UPDATE `users` SET `privileges` = '{
+    "common":{"departments":"on","costplaces":"on","garmentusers":"on","garments":"on"},
+    "reports":{"total_report":"on","garments_in_use":"on","distribution_by_date":"on","current_load":"on","misseized_garments":"on","rejected_garments":"on","deposited_garments":"on","userbound":"on","garmentusers_per_arsimo":"on","machines_load":"on","packinglists":"on"},
+    "manually":{"distribution":"on","deposit":"on"},
+    "circulation_management":{"circulationadvice":"on","beyond_circulation":"on","in_circulation":"on","throw_off_garments":"on"},
+    "linen_service":{"repairs":"on","despeckles":"on","tag_replacements":"on","extra_load":"on","washcount_garments":"on","userbound":"on"},
+    "master_data":{"sizes":"on","articles":"on","professions":"on","garmentmodifications":"on","garmentmanagers":"on"}}'
+    WHERE `users`.`username` = 'Technico';
+
+  FILES
+  * client_details.php [del]
+  * distributors.php [edit]
+  * distributors_details.php [del]
+  * emailsettings.php [new]
+  * garments.php [edit]
+  * garmentdespeckles.php [edit]
+  * garmentrepairs.php [edit]
+  * include/functions.garments [edit]
+  * include/mysqlcontrol.php [edit]
+  * layout/common/menu.tpl [edit]
+  * layout/pages/client_details.tpl [del]
+  * layout/pages/distributors_details.tpl [del]
+  * layout/pages/emailsettings.tpl [new]
+  * layout/pages/garments.tpl [edit]
+  * layout/pages/garmentusers.tpl [edit]
+  * library/* [new]
+  * locale/dutch/language.php [edit]
+  * locale/english/language.php [edit]
+  * locale/french/language.php [edit]
+
+  IMPORTANT
+  ! Update the database credentials in file library/database.php.
+  ! Update the client settings in the management module after updating.
+  ! Update the e-mail settings in the management module after updating.
+
+================================================================================
+
+Release 1.5.0
+
+* Initial Release
